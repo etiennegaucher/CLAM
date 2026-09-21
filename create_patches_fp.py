@@ -10,6 +10,7 @@ import argparse
 import pdb
 import pandas as pd
 from tqdm import tqdm
+import json
 
 def stitching(file_path, wsi_object, downscale = 64):
 	start = time.time()
@@ -56,7 +57,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 				  use_default_params = False, 
 				  seg = False, save_mask = True, 
 				  stitch= False, 
-				  patch = False, auto_skip=True, process_list = None):
+				  patch = False, auto_skip=True, process_list = None, roi = None):
 	
 
 
@@ -193,6 +194,18 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 			mask_path = os.path.join(mask_save_dir, slide_id+'.jpg')
 			mask.save(mask_path)
 
+		# Extract the ROI from the geojson-file (works only if one rectangular ROI)
+		if roi is not None and os.path.exists(os.path.join(roi, slide_id + '.geojson')):
+			print(f"Loading ROI from {os.path.join(roi, slide_id + '.geojson')}")
+			with open(os.path.join(roi, slide_id + '.geojson'), 'r') as f:
+				json_data = json.load(f)
+
+			# Get ROI top left and bottom right coordinates
+			roi_coordinates = np.array(json_data["features"][0]["geometry"]["coordinates"][0])
+			top_left = roi_coordinates.min(axis=0)
+			bot_right = roi_coordinates.max(axis=0)
+			current_patch_params.update({'top_left': top_left, 'bot_right': bot_right})
+
 		patch_time_elapsed = -1 # Default time
 		if patch:
 			current_patch_params.update({'patch_level': patch_level, 'patch_size': patch_size, 'step_size': step_size, 
@@ -246,6 +259,8 @@ parser.add_argument('--patch_level', type=int, default=0,
 					help='downsample level at which to patch')
 parser.add_argument('--process_list',  type = str, default=None,
 					help='name of list of images to process with parameters (.csv)')
+parser.add_argument('--roi', type = str, default=None,
+					help='path to folder containing geojson files')
 
 if __name__ == '__main__':
 	args = parser.parse_args()
@@ -308,4 +323,4 @@ if __name__ == '__main__':
 											seg = args.seg,  use_default_params=False, save_mask = True, 
 											stitch= args.stitch,
 											patch_level=args.patch_level, patch = args.patch,
-											process_list = process_list, auto_skip=args.no_auto_skip)
+											process_list = process_list, auto_skip=args.no_auto_skip, roi = args.roi)
