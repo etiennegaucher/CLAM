@@ -181,7 +181,7 @@ elif args.task == 'ttp_classification':
     args.n_classes=2
     dataset = Generic_MIL_Dataset(csv_path = 'dataset_csv/ttp_classification.csv',
                             data_dir= os.path.join(args.data_root_dir, 'features'),
-                            shuffle = True,
+                            shuffle = False,
                             seed = args.seed,
                             print_info = True,
                             label_dict = {'NO':0, 'YES':1},
