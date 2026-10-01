@@ -4,6 +4,7 @@ import pandas as pd
 from dataset_modules.dataset_generic import Generic_WSI_Classification_Dataset, Generic_MIL_Dataset, save_splits
 import argparse
 import numpy as np
+from sklearn.model_selection import StratifiedGroupKFold
 
 parser = argparse.ArgumentParser(description='Creating splits for whole slide classification')
 parser.add_argument('--label_frac', type=float, default= 1.0,
@@ -12,7 +13,7 @@ parser.add_argument('--seed', type=int, default=1,
                     help='random seed (default: 1)')
 parser.add_argument('--k', type=int, default=10,
                     help='number of splits (default: 10)')
-parser.add_argument('--task', type=str, choices=['task_1_tumor_vs_normal', 'task_2_tumor_subtyping'])
+parser.add_argument('--task', type=str, choices=['task_1_tumor_vs_normal', 'task_2_tumor_subtyping', 'ttp_classification'])
 parser.add_argument('--val_frac', type=float, default= 0.1,
                     help='fraction of labels for validation (default: 0.1)')
 parser.add_argument('--test_frac', type=float, default= 0.1,
@@ -41,6 +42,17 @@ elif args.task == 'task_2_tumor_subtyping':
                             patient_voting='maj',
                             ignore=[])
 
+elif args.task == 'ttp_classification':
+    args.n_classes=2
+    dataset = Generic_WSI_Classification_Dataset(csv_path = 'dataset_csv/ttp_classification.csv',
+                            shuffle = False,
+                            seed = args.seed,
+                            print_info = True,
+                            label_dict = {'NO':0, 'YES':1},
+                            label_col='label',
+                            patient_strat=False,
+                            ignore=[])
+
 else:
     raise NotImplementedError
 
@@ -58,8 +70,20 @@ if __name__ == '__main__':
         split_dir = 'splits/'+ str(args.task) + '_{}'.format(int(lf * 100))
         os.makedirs(split_dir, exist_ok=True)
         dataset.create_splits(k = args.k, val_num = val_num, test_num = test_num, label_frac=lf)
+
+        folds = StratifiedGroupKFold(n_splits = args.k, shuffle=True).split(dataset.slide_data["slide_id"], np.asarray(dataset.slide_data["label"], dtype=str), dataset.slide_data["case_id"])
+        fold_list = []
+        for _, test_set in folds:
+            fold_list.append(test_set)
+
         for i in range(args.k):
-            dataset.set_splits()
+            if args.task == 'ttp_classification':
+                dataset.test_ids = fold_list[i]
+                dataset.val_ids = fold_list[(i + 1) % args.k]
+                dataset.train_ids = np.setdiff1d(np.arange(len(dataset.slide_data)).astype(int),
+                                                 np.union1d(dataset.test_ids, dataset.val_ids))
+            else:
+                dataset.set_splits()
             descriptor_df = dataset.test_split_gen(return_descriptor=True)
             splits = dataset.return_splits(from_id=True)
             save_splits(splits, ['train', 'val', 'test'], os.path.join(split_dir, 'splits_{}.csv'.format(i)))
