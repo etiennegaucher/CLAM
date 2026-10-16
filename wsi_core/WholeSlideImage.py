@@ -451,6 +451,8 @@ class WholeSlideImage(object):
         num_workers = mp.cpu_count()
         if num_workers > 4:
             num_workers = 4
+        if num_workers > 8:
+            num_workers = 8
         pool = mp.Pool(num_workers)
 
         iterable = [(coord, contour_holes, ref_patch_size[0], cont_check_fn) for coord in coord_candidates]
